@@ -59,7 +59,7 @@ export default function GlobalSearch() {
         onFocus={() => setOpen(true)}
       />
       {open && q.trim().length >= 2 && (
-        <div className="absolute z-50 mt-1 w-full bg-surface border border-line rounded-md shadow-lg max-h-96 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-surface border border-line rounded-md shadow-lg max-h-96 overflow-y-auto overscroll-contain">
           {loading && <div className="px-3 py-2 text-sm text-ink/50">Searching…</div>}
           {!loading && !hasResults && <div className="px-3 py-2 text-sm text-ink/50">No results</div>}
 

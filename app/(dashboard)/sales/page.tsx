@@ -63,7 +63,7 @@ export default function SalesPage() {
   const [sales, setSales] = useState<SaleListRow[]>([]);
   const [q, setQ] = useState("");
   const [showDueOnly, setShowDueOnly] = useState(false);
-  const [showPendingCodOnly, setShowPendingCodOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING" | "SHIPPED" | "DELIVERED" | "RETURNED" | "REFUSED">("ALL");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [category, setCategory] = useState("");
@@ -92,7 +92,7 @@ export default function SalesPage() {
 
   const filtered = sales
     .filter((s) => (showDueOnly ? dueOf(s) > 0.01 : true))
-    .filter((s) => (showPendingCodOnly ? ["PENDING", "SHIPPED"].includes(s.codStatus) : true))
+    .filter((s) => (statusFilter === "ALL" ? true : s.codStatus === statusFilter))
     .filter((s) => {
       if (!q) return true;
       const term = q.toLowerCase();
@@ -310,10 +310,18 @@ export default function SalesPage() {
             <input type="checkbox" checked={showDueOnly} onChange={(e) => setShowDueOnly(e.target.checked)} />
             Show only sales with due
           </label>
-          <label className="flex items-center gap-1.5 text-sm text-ink/70 border border-line rounded-md px-2 py-1.5">
-            <input type="checkbox" checked={showPendingCodOnly} onChange={(e) => setShowPendingCodOnly(e.target.checked)} />
-            Show only outstanding COD orders (pending/shipped)
-          </label>
+          <select
+            className="input w-auto"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          >
+            <option value="ALL">All statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="SHIPPED">Shipped</option>
+            <option value="DELIVERED">Delivered</option>
+            <option value="RETURNED">Partial Delivered</option>
+            <option value="REFUSED">Refused</option>
+          </select>
           {totalDue > 0 && (
             <span className="text-sm text-clay">Total outstanding due: ৳{totalDue.toLocaleString()}</span>
           )}
@@ -322,14 +330,17 @@ export default function SalesPage() {
           </button>
         </div>
 
+        <div className="text-xs text-ink/50 mb-2">{filtered.length} sale(s)</div>
+
         <div className="space-y-3">
-          {filtered.map((s) => {
+          {filtered.map((s, i) => {
             const due = dueOf(s);
             return (
               <div key={s.id} className="card">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <div className="text-sm font-medium text-ink">
+                      <span className="text-ink/40 mr-1">{i + 1}.</span>
                       {s.invoiceNo} <span className="text-xs text-ink/50">· {s.source}</span>
                     </div>
                     <div className="text-xs text-ink/50">

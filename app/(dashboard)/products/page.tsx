@@ -507,16 +507,21 @@ export default function ProductsPage() {
         </label>
       </div>
 
+      <div className="text-xs text-ink/50 mb-2">
+        {products.filter((p) => showInactive || p.active).length} product(s)
+      </div>
+
       <div className="space-y-3">
         {products
           .filter((p) => showInactive || p.active)
-          .map((p) => {
+          .map((p, i) => {
           const totalStock = p.variants.reduce((s, v) => s + v.stock, 0);
           const isOpen = openId === p.id;
           return (
             <div key={p.id} className={`card ${!p.active ? "opacity-60" : ""}`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
+                  <div className="text-xs text-ink/40 font-medium w-6 shrink-0 text-right">{i + 1}.</div>
                   {p.imageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

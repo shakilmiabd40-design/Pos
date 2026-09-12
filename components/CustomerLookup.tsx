@@ -84,7 +84,7 @@ export default function CustomerLookup({
         />
       </div>
       {open && matches.length > 0 && (
-        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-surface border border-line rounded-md shadow-lg max-h-64 overflow-y-auto">
+        <div className="absolute z-50 top-full mt-1 left-0 right-0 bg-surface border border-line rounded-md shadow-lg max-h-64 overflow-y-auto overscroll-contain">
           <div className="px-3 pt-2 text-[11px] font-medium uppercase text-ink/40">Existing customers</div>
           {matches.map((c) => (
             <button

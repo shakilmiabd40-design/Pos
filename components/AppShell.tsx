@@ -24,7 +24,28 @@ export default function AppShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const pathname = usePathname();
+
+  useEffect(() => {
+    try {
+      setSidebarHidden(localStorage.getItem("sidebar-hidden") === "1");
+    } catch {
+      // localStorage unavailable — just keep the sidebar shown.
+    }
+  }, []);
+
+  function toggleSidebar() {
+    setSidebarHidden((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("sidebar-hidden", next ? "1" : "0");
+      } catch {
+        // ignore — this is just a remembered preference, not critical data.
+      }
+      return next;
+    });
+  }
 
   return (
     <ToastProvider>
@@ -59,12 +80,23 @@ export default function AppShell({
       )}
 
       {/* Fixed sidebar on desktop */}
-      <aside className="hidden md:flex md:w-60 md:shrink-0 border-r border-line bg-surface flex-col print:hidden">
-        <SidebarContent groups={groups} userName={userName} userRole={userRole} pathname={pathname} />
-      </aside>
+      {!sidebarHidden && (
+        <aside className="hidden md:flex md:w-60 md:shrink-0 border-r border-line bg-surface flex-col print:hidden">
+          <SidebarContent groups={groups} userName={userName} userRole={userRole} pathname={pathname} />
+        </aside>
+      )}
 
       <main className="flex-1 min-w-0 print:w-full">
         <div className="hidden md:flex items-center justify-between gap-4 border-b border-line bg-surface px-6 py-3 print:hidden">
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={sidebarHidden ? "Show menu" : "Hide menu"}
+            title={sidebarHidden ? "Show menu" : "Hide menu"}
+            className="border border-line rounded-md px-2.5 py-1.5 text-sm text-ink/70 hover:text-ink shrink-0"
+          >
+            {sidebarHidden ? "☰" : "«"}
+          </button>
           <GlobalSearch />
           <ThemeToggle />
         </div>
