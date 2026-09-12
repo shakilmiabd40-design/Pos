@@ -1,0 +1,355 @@
+// Prisma schema for Shoe Shop POS + ERP
+// Target production DB: PostgreSQL (Neon).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+enum SaleSource {
+  POS
+  WEBSITE
+}
+
+enum WarrantyStatus {
+  ACTIVE
+  EXPIRED
+  CLAIMED
+  VOID
+}
+
+// Singleton row (there's only ever one) holding the shop's own name,
+// address and contact info — shown on printed receipts/invoices.
+model ShopSettings {
+  id        String   @id @default(cuid())
+  shopName  String   @default("My Shoe Shop")
+  address   String?
+  phone     String?
+  email     String?
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(STAFF)
+  // Which back-office modules a STAFF user can see/use, e.g.
+  // ["products","purchases","suppliers","sales","returns","damages","warranties","reports"].
+  // Ignored for ADMIN, who always has full access.
+  permissions  Json     @default("[]")
+  // Which dashboard widgets this user wants to see, e.g.
+  // ["todaySales","closingStock","dailyPnl"]. Null/unset means "show
+  // everything" (the default for new users).
+  dashboardWidgets Json?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchases        Purchase[]
+  sales            Sale[]
+  damages          Damage[]
+  returns          Return[]
+  payments         Payment[]
+  supplierPayments SupplierPayment[]
+  expenses         Expense[]
+  dayClosings      DayClosing[]
+  activityLogs     ActivityLog[]
+  apiCredentials   ApiCredential[]
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases Purchase[]
+}
+
+// A named, phone-identified customer. Created automatically the first time
+// a sale is made with that phone number, so staff don't have to remember to
+// add customers separately — it just builds up as sales happen.
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  address   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sales Sale[]
+}
+
+// A shoe model / design. Prices are shared across sizes; stock is tracked
+// per size on ProductVariant below.
+model Product {
+  id        String   @id @default(cuid())
+  name      String
+  brand     String?
+  category  String?
+  color     String?
+  costPrice Float    @default(0)
+  sellPrice Float    @default(0)
+  // Optional image URL (hosted image link) shown on the product list and POS.
+  imageUrl  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants ProductVariant[]
+}
+
+// One row per size of a product, e.g. "Nike Air 001" size 41.
+// This is what actually carries a SKU and a stock count.
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  size      String
+  sku       String   @unique
+  // Optional barcode/QR value (often different from the SKU, e.g. a
+  // manufacturer's own EAN/UPC code) — scan-able from POS to add this size.
+  barcode   String?  @unique
+  stock     Int      @default(0)
+  reorderAt Int      @default(3)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchaseItems PurchaseItem[]
+  saleItems     SaleItem[]
+  damages       Damage[]
+  warranties    Warranty[]
+
+  @@unique([productId, size])
+}
+
+model Purchase {
+  id          String   @id @default(cuid())
+  invoiceNo   String?
+  supplierId  String
+  supplier    Supplier @relation(fields: [supplierId], references: [id])
+  totalAmount Float    @default(0)
+  // Cumulative amount actually paid to the supplier so far for this
+  // purchase (initial payment at entry time + any later due payments).
+  // totalAmount - amountPaid = what the shop still owes the supplier.
+  amountPaid  Float    @default(0)
+  note        String?
+  date        DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+
+  items    PurchaseItem[]
+  payments SupplierPayment[]
+}
+
+// One row per payment made to a supplier against a purchase — the first
+// one recorded at entry time, and any later ones paying off the due.
+model SupplierPayment {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      String   @default("cash")
+  date        DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model PurchaseItem {
+  id         String         @id @default(cuid())
+  purchaseId String
+  purchase   Purchase       @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+  qty        Int
+  unitCost   Float
+}
+
+model Sale {
+  id            String     @id @default(cuid())
+  invoiceNo     String     @unique
+  customerId    String?
+  customer      Customer?  @relation(fields: [customerId], references: [id])
+  customerName  String?
+  customerPhone String?
+  discount      Float      @default(0)
+  totalAmount   Float      @default(0)
+  // Cumulative amount actually received so far (initial payment at sale
+  // time + any later due payments). totalAmount - amountPaid = due.
+  amountPaid    Float      @default(0)
+  paymentMethod String     @default("cash")
+  source        SaleSource @default(POS)
+  // Cash-on-delivery tracking, mainly for WEBSITE orders sent out via
+  // courier. deliveryCharge is what the courier charges the shop; when a
+  // COD order comes back (customer refuses/returns it), that charge is
+  // still owed to the courier — a pure loss — so it's recorded as an
+  // Expense automatically when codStatus flips to RETURNED/REFUSED.
+  deliveryCharge Float     @default(0)
+  codStatus      String    @default("PENDING") // PENDING | DELIVERED | RETURNED | REFUSED
+  date          DateTime   @default(now())
+  createdById   String?
+  createdBy     User?      @relation(fields: [createdById], references: [id])
+  createdAt     DateTime   @default(now())
+
+  items    SaleItem[]
+  returns  Return[]
+  payments Payment[]
+}
+
+// One row per payment received against a sale — the first one recorded at
+// checkout, and any later ones when a customer pays off their due balance.
+model Payment {
+  id          String   @id @default(cuid())
+  saleId      String
+  sale        Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      String   @default("cash")
+  date        DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model SaleItem {
+  id        String         @id @default(cuid())
+  saleId    String
+  sale      Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  qty       Int
+  unitPrice Float
+  // Optional per-item discount amount (taka off this line, before qty),
+  // on top of/separate from the sale-level discount.
+  discount  Float          @default(0)
+  subtotal  Float
+
+  warranty Warranty?
+  returns  Return[]
+}
+
+model Warranty {
+  id         String         @id @default(cuid())
+  saleItemId String         @unique
+  saleItem   SaleItem       @relation(fields: [saleItemId], references: [id], onDelete: Cascade)
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+  startDate  DateTime       @default(now())
+  endDate    DateTime
+  status     WarrantyStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+}
+
+model Return {
+  id           String   @id @default(cuid())
+  saleId       String
+  sale         Sale     @relation(fields: [saleId], references: [id])
+  saleItemId   String
+  saleItem     SaleItem @relation(fields: [saleItemId], references: [id])
+  qty          Int
+  reason       String?
+  refundAmount Float    @default(0)
+  restocked    Boolean  @default(false)
+  date         DateTime @default(now())
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model Damage {
+  id          String         @id @default(cuid())
+  variantId   String
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  qty         Int
+  reason      String?
+  date        DateTime       @default(now())
+  createdById String?
+  createdBy   User?          @relation(fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+}
+
+// A shop running cost — rent, electricity, staff salary, transport, etc.
+// Used to compute real Profit & Loss (Revenue - COGS - Expenses).
+model Expense {
+  id          String   @id @default(cuid())
+  category    String
+  amount      Float
+  method      String   @default("cash")
+  note        String?
+  date        DateTime @default(now())
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// One row per day the cash drawer is counted and reconciled against what
+// the system expects, based on that day's cash sales/payments/refunds/expenses.
+model DayClosing {
+  id           String   @id @default(cuid())
+  date         DateTime @unique
+  openingCash  Float    @default(0)
+  expectedCash Float    @default(0)
+  actualCash   Float    @default(0)
+  difference   Float    @default(0)
+  notes        String?
+  closedById   String?
+  closedBy     User?    @relation(fields: [closedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+// Audit trail — who did what, when. Admin-only visibility.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  userName   String
+  action     String
+  entityType String
+  entityId   String?
+  details    String?
+  createdAt  DateTime @default(now())
+}
+
+// A lightweight hit-log used to rate-limit the public API per API key.
+// Rows older than a minute are irrelevant and get cleaned up opportunistically
+// (no separate cron needed) — see lib/rate-limit.ts.
+model ApiRateLimitHit {
+  id        String   @id @default(cuid())
+  apiKey    String
+  createdAt DateTime @default(now())
+
+  @@index([apiKey, createdAt])
+}
+
+// A generated key + secret pair for your website (or any other client) to
+// call the /api/public/* endpoints. The secret is only ever stored as a
+// hash — it's shown to you once at creation time and can't be retrieved
+// again, the same way Stripe/GitHub-style API keys work.
+model ApiCredential {
+  id            String    @id @default(cuid())
+  name          String
+  apiKey        String    @unique
+  apiSecretHash String
+  active        Boolean   @default(true)
+  lastUsedAt    DateTime?
+  createdById   String?
+  createdBy     User?     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime  @default(now())
+}

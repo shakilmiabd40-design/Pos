@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-ink: 30 42 36;      /* #1E2A24 */
+  --color-paper: 246 243 236; /* #F6F3EC */
+  --color-moss: 57 83 63;     /* #39533F */
+  --color-clay: 181 101 74;   /* #B5654A */
+  --color-line: 218 211 194;  /* #DAD3C2 */
+  --color-surface: 255 255 255; /* card/panel background */
+}
+
+html.dark {
+  --color-ink: 230 226 216;    /* light text on dark background */
+  --color-paper: 17 23 19;     /* page background */
+  --color-moss: 121 184 132;   /* brighter accent so it still pops on dark */
+  --color-clay: 224 140 104;
+  --color-line: 45 56 48;      /* subtle dark border */
+  --color-surface: 27 35 29;   /* card/panel background */
+}
+
+html, body {
+  background-color: rgb(var(--color-paper));
+  color: rgb(var(--color-ink));
+}
+
+* {
+  border-color: rgb(var(--color-line));
+}
+
+.card {
+  @apply bg-surface border border-line rounded-md p-5;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors;
+}
+
+.btn-primary {
+  @apply btn bg-moss text-white hover:opacity-90;
+}
+
+.btn-secondary {
+  @apply btn bg-surface text-ink border border-line hover:bg-paper;
+}
+
+.btn-danger {
+  @apply btn bg-clay text-white hover:opacity-90;
+}
+
+.input {
+  @apply w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-moss/40;
+}
+
+.label {
+  @apply text-xs font-medium text-ink/70 mb-1 block;
+}
+
+table.data-table {
+  @apply w-full text-sm border-collapse;
+}
+
+table.data-table th {
+  @apply text-left font-medium text-ink/60 border-b border-line py-2 px-2;
+}
+
+table.data-table td {
+  @apply border-b border-line/70 py-2 px-2;
+}
+
+/* Print: only the page's own print-only content should show. Everything
+   else (sidebar, topbar, on-screen page content) is hidden via print:hidden
+   classes in the components themselves; this is a fallback safety net. */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  html.dark {
+    /* Never print on a black background, regardless of screen theme. */
+    --color-ink: 30 42 36;
+    --color-paper: 255 255 255;
+    --color-surface: 255 255 255;
+    --color-line: 218 211 194;
+  }
+}

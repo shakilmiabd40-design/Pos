@@ -1,0 +1,39 @@
+{
+  "name": "shoe-pos",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "next": "14.2.35",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "@prisma/client": "5.18.0",
+    "bcryptjs": "2.4.3",
+    "jose": "5.6.3",
+    "xlsx": "0.18.5",
+    "zod": "3.23.8",
+    "nodemailer": "6.9.14",
+    "html5-qrcode": "2.3.8"
+  },
+  "devDependencies": {
+    "prisma": "5.18.0",
+    "typescript": "5.5.4",
+    "@types/node": "20.14.13",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/bcryptjs": "2.4.6",
+    "@types/nodemailer": "6.4.15",
+    "tailwindcss": "3.4.7",
+    "postcss": "8.4.40",
+    "autoprefixer": "10.4.19",
+    "vitest": "1.6.0"
+  }
+}
