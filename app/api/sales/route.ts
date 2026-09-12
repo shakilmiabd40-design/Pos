@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { jsonError, genInvoiceNo, oneYearLater, dateRangeFilter } from "@/lib/api-helpers";
 import { logActivity } from "@/lib/activity";
 import { computeItemsSubtotal, scaleSplitPayments } from "@/lib/sale-math";
+import { bdDateString, bdDateWithCurrentTime } from "@/lib/bd-time";
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -53,9 +54,13 @@ export async function POST(req: NextRequest) {
   if (!session) return jsonError("Login required", 401);
 
   const body = await req.json();
-  const { customerName, customerPhone, paymentMethod, discount, items, paidAmount, payments, deliveryCharge, isCod } = body;
+  const { customerName, customerPhone, paymentMethod, discount, items, paidAmount, payments, deliveryCharge, isCod, saleDate: saleDateStr } = body;
 
   if (!Array.isArray(items) || items.length === 0) return jsonError("Add at least one item to the sale");
+
+  if (saleDateStr && saleDateStr > bdDateString()) {
+    return jsonError("Sale date can't be in the future");
+  }
 
   const variantIds = items.map((it: any) => it.variantId);
   const variants = await prisma.productVariant.findMany({
@@ -100,7 +105,7 @@ export async function POST(req: NextRequest) {
     : paidAmount !== undefined
     ? Math.min(Math.max(Number(paidAmount) || 0, 0), totalAmount)
     : totalAmount;
-  const saleDate = new Date();
+  const saleDate = saleDateStr ? bdDateWithCurrentTime(saleDateStr) : new Date();
   const displayPaymentMethod = isCod
     ? "cod"
     : splitPayments.length > 1

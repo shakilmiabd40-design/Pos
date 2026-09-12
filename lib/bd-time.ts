@@ -39,3 +39,14 @@ export function bdDateString(date: Date = new Date()): string {
   const shifted = new Date(date.getTime() + BD_OFFSET_MS);
   return shifted.toISOString().slice(0, 10);
 }
+
+// Combines a picked BD calendar day (e.g. from a <input type="date"> when
+// backdating a sale) with right-now's time-of-day, so records entered
+// later for an earlier day still sort sensibly against each other instead
+// of all landing on the exact same instant (midnight).
+export function bdDateWithCurrentTime(dateStr: string): Date {
+  const { start } = bdDayRangeFromDateString(dateStr);
+  const now = new Date();
+  const msSinceStartOfToday = now.getTime() - startOfBdDay(now).getTime();
+  return new Date(start.getTime() + msSinceStartOfToday);
+}

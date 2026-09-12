@@ -5,6 +5,7 @@ import { api } from "@/lib/client-fetch";
 import { useToast } from "@/components/Toast";
 import BarcodeScannerButton from "@/components/BarcodeScanner";
 import CustomerLookup from "@/components/CustomerLookup";
+import { bdDateString } from "@/lib/bd-time";
 
 type Variant = { id: string; size: string; sku: string; barcode: string | null; stock: number };
 type Product = { id: string; name: string; sellPrice: number; variants: Variant[] };
@@ -32,6 +33,7 @@ export default function PosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [customerName, setCustomerName] = useState("");
+  const [saleDate, setSaleDate] = useState(() => bdDateString());
   const [customerPhone, setCustomerPhone] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [discount, setDiscount] = useState("0");
@@ -164,6 +166,7 @@ export default function PosPage() {
           payments: splitMode && !isCod ? splitPayments.filter((p) => Number(p.amount) > 0) : undefined,
           isCod,
           deliveryCharge,
+          saleDate,
         }),
       });
       setLastInvoice(sale.invoiceNo);
@@ -178,6 +181,7 @@ export default function PosPage() {
       setSplitPayments([{ method: "cash", amount: "" }]);
       setIsCod(false);
       setDeliveryCharge("0");
+      setSaleDate(bdDateString());
       await loadProducts();
       await loadRecent();
     } catch (e: any) {
@@ -307,6 +311,19 @@ export default function PosPage() {
             </div>
 
             <div className="space-y-2 mb-3">
+              <div>
+                <label className="label">Sale date</label>
+                <input
+                  className="input max-w-[160px]"
+                  type="date"
+                  value={saleDate}
+                  max={bdDateString()}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                />
+                {saleDate !== bdDateString() && (
+                  <div className="text-xs text-clay mt-1">Backdating this sale to {saleDate}.</div>
+                )}
+              </div>
               <CustomerLookup
                 name={customerName}
                 phone={customerPhone}
