@@ -9,8 +9,16 @@ import { prisma } from "@/lib/prisma";
 // courier cost still shows up as a normal Expense, and is broken out
 // separately as "courierLoss" for visibility (it's already counted inside
 // totalExpenses, not subtracted twice).
+//
+// For COD orders that DID complete, revenue includes the delivery charge
+// collected from the customer in full — but the courier company deducts
+// their own fee for actually making the delivery, which is a real cost
+// separate from that revenue. That fee is booked as a "Courier charge"
+// expense (see the cod-status route) and broken out here as
+// "courierCharge" for visibility, same as courierLoss — also already
+// counted inside totalExpenses, not subtracted twice.
 export async function computePnl(dateWhere: { gte?: Date; lte?: Date }) {
-  const [sales, returns, damages, expenses, courierLossAgg] = await Promise.all([
+  const [sales, returns, damages, expenses, courierLossAgg, courierChargeAgg] = await Promise.all([
     prisma.sale.findMany({
       where: { date: dateWhere, codStatus: { notIn: ["RETURNED", "REFUSED"] } },
       include: { items: { include: { variant: { include: { product: true } } } } },
@@ -19,6 +27,7 @@ export async function computePnl(dateWhere: { gte?: Date; lte?: Date }) {
     prisma.damage.findMany({ where: { date: dateWhere }, include: { variant: { include: { product: true } } } }),
     prisma.expense.aggregate({ where: { date: dateWhere }, _sum: { amount: true } }),
     prisma.expense.aggregate({ where: { date: dateWhere, category: "Courier loss" }, _sum: { amount: true } }),
+    prisma.expense.aggregate({ where: { date: dateWhere, category: "Courier charge" }, _sum: { amount: true } }),
   ]);
 
   const revenue = sales.reduce((sum, s) => sum + s.totalAmount, 0);
@@ -31,6 +40,7 @@ export async function computePnl(dateWhere: { gte?: Date; lte?: Date }) {
   const damageLoss = damages.reduce((sum, d) => sum + d.qty * d.variant.product.costPrice, 0);
   const totalExpenses = expenses._sum.amount || 0;
   const courierLoss = courierLossAgg._sum.amount || 0;
+  const courierCharge = courierChargeAgg._sum.amount || 0;
 
   const netSales = revenue - returnsRefunded;
   const grossProfit = netSales - cogs;
@@ -46,6 +56,7 @@ export async function computePnl(dateWhere: { gte?: Date; lte?: Date }) {
     damageLoss,
     totalExpenses,
     courierLoss,
+    courierCharge,
     netProfit,
     invoiceCount: sales.length,
   };

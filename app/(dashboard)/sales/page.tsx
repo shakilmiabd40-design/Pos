@@ -137,14 +137,47 @@ export default function SalesPage() {
     }
   }
 
-  async function updateCodStatus(id: string, status: "SHIPPED" | "DELIVERED") {
-    const confirmMsg =
-      status === "SHIPPED"
-        ? "Mark this order as shipped (handed to courier)?"
-        : "Mark this order as delivered? This will record it as fully paid.";
-    if (!(await askConfirm(confirmMsg))) return;
+  const [deliveringId, setDeliveringId] = useState<string | null>(null);
+  const [courierCharge, setCourierCharge] = useState("");
+
+  // If this order actually has a delivery charge on it, ask what the
+  // courier deducted for making the delivery (defaults to the full charge
+  // — edit it down if the courier's cut was actually less). If there's no
+  // delivery charge at all, there's nothing to ask, so just confirm and go.
+  async function startDeliverPrompt(s: SaleListRow) {
+    if (s.deliveryCharge > 0) {
+      setDeliveringId(s.id);
+      setCourierCharge(String(s.deliveryCharge));
+      return;
+    }
+    if (!(await askConfirm("Mark this order as delivered? This will record it as fully paid."))) return;
     try {
-      await api(`/api/sales/${id}/cod-status`, { method: "PUT", body: JSON.stringify({ status }) });
+      await api(`/api/sales/${s.id}/cod-status`, { method: "PUT", body: JSON.stringify({ status: "DELIVERED" }) });
+      await load();
+    } catch (e: any) {
+      showToast(e.message, "error");
+    }
+  }
+
+  async function confirmDeliver() {
+    if (!deliveringId) return;
+    try {
+      await api(`/api/sales/${deliveringId}/cod-status`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "DELIVERED", courierCharge }),
+      });
+      setDeliveringId(null);
+      setCourierCharge("");
+      await load();
+    } catch (e: any) {
+      showToast(e.message, "error");
+    }
+  }
+
+  async function markShipped(s: SaleListRow) {
+    if (!(await askConfirm("Mark this order as shipped (handed to courier)?"))) return;
+    try {
+      await api(`/api/sales/${s.id}/cod-status`, { method: "PUT", body: JSON.stringify({ status: "SHIPPED" }) });
       await load();
     } catch (e: any) {
       showToast(e.message, "error");
@@ -318,13 +351,13 @@ export default function SalesPage() {
                       {due > 0 && <div className="text-xs text-clay">due ৳{due.toLocaleString()}</div>}
                     </div>
                     {s.codStatus === "PENDING" && (
-                      <button className="text-ink text-xs hover:underline" onClick={() => updateCodStatus(s.id, "SHIPPED")}>
+                      <button className="text-ink text-xs hover:underline" onClick={() => markShipped(s)}>
                         Mark shipped
                       </button>
                     )}
                     {["PENDING", "SHIPPED"].includes(s.codStatus) && (
                       <>
-                        <button className="text-moss text-xs hover:underline" onClick={() => updateCodStatus(s.id, "DELIVERED")}>
+                        <button className="text-moss text-xs hover:underline" onClick={() => startDeliverPrompt(s)}>
                           Mark delivered
                         </button>
                         <button className="text-clay text-xs hover:underline" onClick={() => startReturnPrompt(s)}>
@@ -373,6 +406,32 @@ export default function SalesPage() {
                     <button className="btn-secondary" onClick={() => setPayingId(null)}>
                       Cancel
                     </button>
+                  </div>
+                )}
+
+                {deliveringId === s.id && (
+                  <div className="mt-3 pt-3 border-t border-line">
+                    <div className="text-sm text-ink/70 mb-2">
+                      Customer was charged ৳{s.deliveryCharge.toLocaleString()} for delivery. How much did the courier actually
+                      charge/deduct for delivering it?
+                    </div>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div>
+                        <label className="label">Courier's actual charge</label>
+                        <input className="input w-32" type="number" min="0" value={courierCharge} onChange={(e) => setCourierCharge(e.target.value)} />
+                      </div>
+                      <button className="btn-primary" onClick={confirmDeliver}>
+                        Confirm delivered
+                      </button>
+                      <button className="btn-secondary" onClick={() => setDeliveringId(null)}>
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="text-xs text-ink/50 mt-2">
+                      {Number(courierCharge) > 0
+                        ? `This will be booked as a ৳${Number(courierCharge).toLocaleString()} courier charge (expense), on top of the item cost already counted.`
+                        : "No courier charge will be booked — you can still add it later from Expenses if needed."}
+                    </div>
                   </div>
                 )}
 

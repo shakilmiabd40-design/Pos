@@ -118,6 +118,7 @@ export default function ReportsPage() {
         { Line: "Damage loss", Amount: data.damageLoss },
         { Line: "Expenses", Amount: data.totalExpenses },
         { Line: "— of which courier loss (COD returns)", Amount: data.courierLoss },
+        { Line: "— of which courier charge (COD delivered)", Amount: data.courierCharge },
         { Line: "Net profit", Amount: data.netProfit },
       ]);
     }
@@ -357,6 +358,12 @@ export default function ReportsPage() {
                 <tr>
                   <td className="py-1 pl-4 text-xs text-ink/40">— of which courier loss (COD returns)</td>
                   <td className="py-1 text-right text-xs text-ink/40">৳{data.courierLoss.toLocaleString()}</td>
+                </tr>
+              )}
+              {(data.courierCharge ?? 0) > 0 && (
+                <tr>
+                  <td className="py-1 pl-4 text-xs text-ink/40">— of which courier charge (COD delivered)</td>
+                  <td className="py-1 text-right text-xs text-ink/40">৳{data.courierCharge.toLocaleString()}</td>
                 </tr>
               )}
               <PnlRow label="Net profit" value={data.netProfit} bold border big />

@@ -7,6 +7,7 @@ export const DASHBOARD_WIDGETS = [
   { key: "totalDue", label: "Total due" },
   { key: "pendingCod", label: "Pending COD deliveries" },
   { key: "courierLoss", label: "Courier loss this month" },
+  { key: "courierCharge", label: "Courier charge this month" },
   { key: "dailyPnl", label: "Today's profit & loss" },
   { key: "monthlyPnl", label: "This month's profit & loss" },
   { key: "lowStockList", label: "Low stock list" },

@@ -78,6 +78,7 @@ export default async function DashboardPage({
     { key: "totalDue", label: "Total due", value: `৳${totalDue.toLocaleString()}`, sub: `${damageMonthAgg._sum.qty || 0} damaged units this month` },
     { key: "pendingCod", label: "Pending COD deliveries", value: `${pendingCodCount}`, sub: "awaiting delivery/return" },
     { key: "courierLoss", label: "Courier loss this month", value: `৳${(courierLossMonthAgg._sum.amount || 0).toLocaleString()}`, sub: "from returned/refused COD" },
+    { key: "courierCharge", label: "Courier charge this month", value: `৳${monthlyPnl.courierCharge.toLocaleString()}`, sub: "courier's cut on delivered COD orders" },
     {
       key: "dailyPnl",
       label: "Today's profit & loss",

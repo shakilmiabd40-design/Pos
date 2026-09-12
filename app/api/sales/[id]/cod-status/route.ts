@@ -8,7 +8,14 @@ import { logActivity } from "@/lib/activity";
 //   PENDING → SHIPPED — handed to the courier, in transit. Just a status
 //               marker, no stock/payment side effects.
 //   → DELIVERED — courier handed it over and collected the cash (including
-//               the delivery charge). Marks the sale as fully paid.
+//               the delivery charge, which is already counted as revenue
+//               on this sale). But the courier company deducts their own
+//               fee for making the delivery — a real cost separate from
+//               that revenue. Pass courierCharge (what the courier
+//               actually charged/deducted) and, if greater than 0, it's
+//               booked as a "Courier charge" expense. Omit it (or pass 0)
+//               and nothing is booked — the old default, for shops that
+//               don't track this.
 //   → RETURNED / REFUSED — the product comes back either way (stock is
 //               restored). What differs is the money: pass actualReturnCost
 //               (what the return actually cost — courier's return fee, or
@@ -25,12 +32,12 @@ import { logActivity } from "@/lib/activity";
 // DELIVERED/RETURNED/REFUSED are final — to correct a mistake, delete the
 // sale entirely and re-enter it, the same as any other sale correction.
 //
-// body: { status: "SHIPPED" | "DELIVERED" | "RETURNED" | "REFUSED", actualReturnCost? }
+// body: { status: "SHIPPED" | "DELIVERED" | "RETURNED" | "REFUSED", actualReturnCost?, courierCharge? }
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session) return jsonError("Login required", 401);
 
-  const { status, actualReturnCost } = await req.json();
+  const { status, actualReturnCost, courierCharge } = await req.json();
   if (!["SHIPPED", "DELIVERED", "RETURNED", "REFUSED"].includes(status)) {
     return jsonError("Status must be SHIPPED, DELIVERED, RETURNED, or REFUSED");
   }
@@ -53,6 +60,40 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return jsonError(`This order is already marked ${sale.codStatus.toLowerCase()} and can't be changed here.`);
   }
 
+  if (status === "DELIVERED") {
+    const courierChargeAmount = Math.max(0, Number(courierCharge) || 0);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const stillDue = Math.max(0, sale.totalAmount - sale.amountPaid);
+      if (stillDue > 0) {
+        await tx.payment.create({
+          data: { saleId: sale.id, amount: stillDue, method: "cod", createdById: session.userId },
+        });
+      }
+      if (courierChargeAmount > 0) {
+        await tx.expense.create({
+          data: {
+            category: "Courier charge",
+            amount: courierChargeAmount,
+            method: "cash",
+            note: `COD delivered — invoice ${sale.invoiceNo}: courier charged ৳${courierChargeAmount} for delivery (customer was charged ৳${sale.deliveryCharge})`,
+            createdById: session.userId,
+          },
+        });
+      }
+      return tx.sale.update({ where: { id: sale.id }, data: { codStatus: "DELIVERED", amountPaid: sale.totalAmount } });
+    });
+
+    await logActivity(
+      session,
+      "COD_STATUS",
+      "Sale",
+      sale.id,
+      `Invoice ${sale.invoiceNo} → DELIVERED${courierChargeAmount > 0 ? ` (৳${courierChargeAmount} courier charge booked)` : ""}`
+    );
+    return NextResponse.json(updated);
+  }
+
   // Was an actual return cost given? Falls back to the historical default
   // per status if not (see comment above).
   const hasProvidedCost =
@@ -64,16 +105,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const diff = sale.deliveryCharge - actualCost;
 
   const updated = await prisma.$transaction(async (tx) => {
-    if (status === "DELIVERED") {
-      const stillDue = Math.max(0, sale.totalAmount - sale.amountPaid);
-      if (stillDue > 0) {
-        await tx.payment.create({
-          data: { saleId: sale.id, amount: stillDue, method: "cod", createdById: session.userId },
-        });
-      }
-      return tx.sale.update({ where: { id: sale.id }, data: { codStatus: status, amountPaid: sale.totalAmount } });
-    }
-
     // RETURNED and REFUSED both bring the stock back and both may book a
     // loss/gain from the delivery-charge vs. actual-return-cost difference.
     for (const it of sale.items) {
